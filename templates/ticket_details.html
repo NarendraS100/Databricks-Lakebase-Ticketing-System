@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<title>Ticket Details</title>
+
+<style>
+
+body{
+
+font-family:Arial;
+
+background:#f5f5f5;
+
+margin:40px;
+
+}
+
+.card{
+
+background:white;
+
+padding:25px;
+
+border-radius:8px;
+
+box-shadow:0 2px 8px rgba(0,0,0,.15);
+
+margin-bottom:30px;
+
+}
+
+table{
+
+width:100%;
+
+border-collapse:collapse;
+
+background:white;
+
+box-shadow:0 2px 8px rgba(0,0,0,.15);
+
+}
+
+th{
+
+background:#1976d2;
+
+color:white;
+
+padding:12px;
+
+}
+
+td{
+
+padding:12px;
+
+border-bottom:1px solid #ddd;
+
+}
+
+.back{
+
+display:inline-block;
+
+margin-bottom:20px;
+
+text-decoration:none;
+
+font-weight:bold;
+
+color:#1976d2;
+
+}
+
+.add-btn{
+
+display:inline-block;
+
+background:#28a745;
+
+color:white;
+
+padding:10px 18px;
+
+border-radius:5px;
+
+text-decoration:none;
+
+font-weight:bold;
+
+margin-bottom:20px;
+
+}
+
+.update-btn{
+
+display:inline-block;
+
+background:#f39c12;
+
+color:white;
+
+padding:10px 18px;
+
+border-radius:5px;
+
+text-decoration:none;
+
+font-weight:bold;
+
+margin-top:15px;
+
+}
+
+.update-btn:hover{
+
+background:#d68910;
+
+color:white;
+
+}
+
+.add-btn:hover{
+
+background:#1d7d34;
+
+color:white;
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<a class="back" href="/">← Back to Ticket List</a>
+
+<div class="card">
+
+<h2>{{ ticket.ticket_id }}</h2>
+
+<p><b>Title :</b> {{ ticket.title }}</p>
+
+<p><b>Status :</b> {{ ticket.status }}</p>
+
+<p><b>Created By :</b> {{ ticket.created_by }}</p>
+
+<p><b>Created At :</b> {{ ticket.created_at }}</p>
+
+<a href="/ticket/{{ ticket.ticket_id }}/update-status" class="update-btn">
+    Update Status
+</a>
+
+</div>
+
+<h2>Messages</h2>
+<a href="/ticket/{{ ticket.ticket_id }}/add-message" class="add-btn">
+    + Add Message
+</a>
+
+<br><br>
+<table>
+
+<tr>
+
+<th>Message ID</th>
+
+<th>Author</th>
+
+<th>Created At</th>
+
+<th>Message</th>
+
+</tr>
+
+{% for msg in messages %}
+
+<tr>
+
+<td>{{ msg.message_id }}</td>
+
+<td>{{ msg.author }}</td>
+
+<td>{{ msg.created_at }}</td>
+
+<td>{{ msg.message_text }}</td>
+
+</tr>
+
+{% endfor %}
+
+</table>
+
+</body>
+
+</html>

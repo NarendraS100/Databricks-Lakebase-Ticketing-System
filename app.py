@@ -6,9 +6,13 @@ Databricks Lakebase Ticketing System Viewer:
 """
 
 import logging
-from flask import Flask, jsonify, render_template_string, request
+from flask import Flask, jsonify, render_template, render_template_string, request
 from flask_cors import CORS
 import lakebase
+import os
+from datetime import datetime
+import uuid
+from flask import redirect
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ticketing-viewer")
@@ -125,106 +129,298 @@ def handle_exception(err):
 
 @app.route("/")
 def index():
-    logger.info("Entered index()")
-    """Main UI - display tickets with filters"""
+
     try:
-        # Get filter parameters
-        status_filter = request.args.get('status', '')
-        
-        # Build query with filters
+
+        status = request.args.get("status", "")
+
         query = """
-            SELECT 
+            SELECT
                 ticket_id,
                 title,
                 status,
                 created_by,
                 created_at
             FROM tickets
-            WHERE 1=1
         """
+
         params = []
-        
-        if status_filter:
-            query += " AND status = %s"
-            params.append(status_filter)
-        
+
+        if status != "":
+
+            query += " WHERE status=%s"
+
+            params.append(status)
+
         query += " ORDER BY created_at DESC"
-        logger.info("Fetching tickets from Lakebase...")
-        # Fetch tickets
-        tickets = lakebase.run_query(query, tuple(params) if params else None)
-        logger.info(f"Fetched {len(tickets)} tickets")
-        
-        # Fetch messages for each ticket
-        for ticket in tickets:
-            logger.info(f"Fetched {len(tickets)} tickets")
-            messages = lakebase.run_query(
-                """
-                SELECT message_id as id, ticket_id, message_text as message, author as created_by, created_at
-                FROM ticket_messages
-                WHERE ticket_id = %s
-                ORDER BY created_at ASC
-                """,
-                (ticket['ticket_id'],)
-            )
-            ticket['messages'] = messages
-            logger.info("Messages fetched successfully")
-        return render_template_string(
-            HTML_TEMPLATE,
-            tickets=tickets,
-            status=status_filter,
-            error=None
-        )
-        
-    except Exception as e:
-        logger.exception("Exception inside index()")
-        return render_template_string(
-            HTML_TEMPLATE,
-            tickets=[],
-            status='',
-            error=str(e)
-        )
 
-
-@app.route("/api/tickets")
-def api_tickets():
-    """API endpoint to get tickets as JSON"""
-    try:
         tickets = lakebase.run_query(
+            query,
+            tuple(params) if params else None
+        )
+
+        return render_template(
+            "index.html",
+            tickets=tickets,
+            selected_status=status
+        )
+
+    except Exception as e:
+
+        logger.exception(e)
+
+        return str(e),500
+@app.route("/ticket/<ticket_id>")
+def ticket_details(ticket_id):
+
+    try:
+
+        ticket = lakebase.run_query(
             """
-            SELECT 
+            SELECT
                 ticket_id,
                 title,
                 status,
                 created_by,
                 created_at
             FROM tickets
-            ORDER BY created_at DESC
-            """
-        )
-        return jsonify(tickets)
-    except Exception as e:
-        logger.exception("Error fetching tickets")
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/tickets/<ticket_id>/messages")
-def api_ticket_messages(ticket_id):
-    """API endpoint to get messages for a specific ticket"""
-    try:
-        messages = lakebase.run_query(
-            """
-            SELECT message_id as id, ticket_id, message_text as message, author as created_by, created_at
-            FROM ticket_messages
-            WHERE ticket_id = %s
-            ORDER BY created_at ASC
+            WHERE ticket_id=%s
             """,
             (ticket_id,)
         )
-        return jsonify(messages)
+
+        if len(ticket)==0:
+            return "Ticket not found",404
+
+        ticket=ticket[0]
+
+        messages = lakebase.run_query(
+            """
+            SELECT
+                message_id,
+                message_text,
+                author,
+                created_at
+            FROM ticket_messages
+            WHERE ticket_id=%s
+            ORDER BY created_at
+            """,
+            (ticket_id,)
+        )
+
+        return render_template(
+            "ticket_details.html",
+            ticket=ticket,
+            messages=messages
+        )
+
     except Exception as e:
-        logger.exception(f"Error fetching messages for ticket {ticket_id}")
-        return jsonify({"error": str(e)}), 500
+        logger.exception(e)
+        return str(e),500
+@app.route("/create-ticket", methods=["GET","POST"])
+def create_ticket():
+
+    if request.method == "GET":
+
+        return render_template("create_ticket.html")
+
+    try:
+
+        ticket_id = "T" + uuid.uuid4().hex[:6].upper()
+
+        title = request.form["title"]
+
+        created_by = request.form["created_by"]
+
+        status = "open"
+
+        created_at = datetime.now()
+
+        lakebase.run_write(
+            """
+            INSERT INTO tickets
+            (
+                ticket_id,
+                title,
+                status,
+                created_by,
+                created_at
+            )
+            VALUES
+            (
+                %s,
+                %s,
+                %s,
+                %s,
+                %s
+            )
+            """,
+            (
+                ticket_id,
+                title,
+                status,
+                created_by,
+                created_at
+            )
+        )
+
+        return redirect("/")
+
+    except Exception as e:
+
+        logger.exception(e)
+
+        return str(e),500
+@app.route("/ticket/<ticket_id>/add-message", methods=["GET","POST"])
+def add_message(ticket_id):
+
+    if request.method=="GET":
+
+        return render_template(
+            "add_message.html",
+            ticket_id=ticket_id
+        )
+
+    try:
+
+        import uuid
+        from datetime import datetime
+
+        message_id="M"+uuid.uuid4().hex[:6].upper()
+
+        message=request.form["message"]
+
+        author=request.form["author"]
+
+        created_at=datetime.now()
+
+        lakebase.run_write(
+            """
+            INSERT INTO ticket_messages
+            (
+                message_id,
+                ticket_id,
+                message_text,
+                author,
+                created_at
+            )
+            VALUES
+            (
+                %s,
+                %s,
+                %s,
+                %s,
+                %s
+            )
+            """,
+            (
+                message_id,
+                ticket_id,
+                message,
+                author,
+                created_at
+            )
+        )
+
+        return redirect(f"/ticket/{ticket_id}")
+
+    except Exception as e:
+
+        logger.exception(e)
+
+        return str(e),500
+@app.route("/ticket/<ticket_id>/update-status", methods=["GET","POST"])
+def update_status(ticket_id):
+
+    if request.method == "GET":
+
+        ticket = lakebase.run_query(
+            """
+            SELECT
+                ticket_id,
+                status
+            FROM tickets
+            WHERE ticket_id=%s
+            """,
+            (ticket_id,)
+        )
+
+        if len(ticket) == 0:
+            return "Ticket not found",404
+
+        return render_template(
+            "update_status.html",
+            ticket=ticket[0]
+        )
+
+    try:
+
+        status = request.form["status"]
+
+        lakebase.run_write(
+            """
+            UPDATE tickets
+            SET status=%s
+            WHERE ticket_id=%s
+            """,
+            (
+                status,
+                ticket_id
+            )
+        )
+
+        return redirect(f"/ticket/{ticket_id}")
+
+    except Exception as e:
+
+        logger.exception(e)
+
+        return str(e),500
+# @app.route("/api/tickets")
+# def api_tickets():
+#     """API endpoint to get tickets as JSON"""
+#     try:
+#         tickets = lakebase.run_query(
+#             """
+#             SELECT 
+#                 ticket_id,
+#                 title,
+#                 status,
+#                 created_by,
+#                 created_at
+#             FROM tickets
+#             ORDER BY created_at DESC
+#             """
+#         )
+#         return jsonify(tickets)
+#     except Exception as e:
+#         logger.exception("Error fetching tickets")
+#         return jsonify({"error": str(e)}), 500
 
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080, debug=False)
+# @app.route("/api/tickets/<ticket_id>/messages")
+# def api_ticket_messages(ticket_id):
+#     """API endpoint to get messages for a specific ticket"""
+#     try:
+#         messages = lakebase.run_query(
+#             """
+#             SELECT message_id as id, ticket_id, message_text as message, author as created_by, created_at
+#             FROM ticket_messages
+#             WHERE ticket_id = %s
+#             ORDER BY created_at ASC
+#             """,
+#             (ticket_id,)
+#         )
+#         return jsonify(messages)
+#     except Exception as e:
+#         logger.exception(f"Error fetching messages for ticket {ticket_id}")
+#         return jsonify({"error": str(e)}), 500
+
+
+# if __name__ == "__main__":
+#     app.run(host="0.0.0.0", port=8080, debug=False)
+if __name__ == '__main__':
+    host = os.getenv('FLASK_RUN_HOST', '0.0.0.0')
+    port = int(os.getenv('FLASK_RUN_PORT', 8000))
+    app.run(debug=True, host=host, port=port)
+    print(f"Flask app running on http://{host}:{port}")
