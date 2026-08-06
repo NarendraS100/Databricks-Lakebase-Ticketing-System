@@ -197,6 +197,6 @@ This project demonstrates how to:
 
 ## 👤 Author
 
-**Mou Das**
+**Narendra Singh**
 
 Data Engineer | Databricks | Apache Spark | Python | SQL
